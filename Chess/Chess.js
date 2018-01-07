@@ -1,20 +1,62 @@
-var playerList=[];
+var playerList;
 var playerNames=["White","Black"];
 var currPlayer;//num
 var currPiece=false;
 var board;
 var messageSlot;
-var again;
-var pastMoves;
-var undo;
-var undoneMoves;
-var redo;
+var again;//button
+var undo;//button
+var redo;//button
 var boardimg;
 var ChessImages;
-var chessPieces;
+var hist;
+var undid;
+var checkMate;
+var highlightOn=true;
+var highlightButton;
+var deadPieces;
+var pause=false;
+
+deadPiece=function(player,value) {
+	this.player=player;
+	this.value=value;
+	deadPieces[this.player].push(this);
+	this.display=function(x,y) {
+		image(ChessImages[this.player][this.value],x,y,25,25);
+	}
+	this.revive=function() {
+		for(let i=0; i<deadPieces[this.player].length; i++) {
+			let deceased=deadPieces[this.player][i];
+			if(deceased.equals(this)) {
+				deadPieces[this.player].splice(i,1);
+				break;
+			}
+		}
+	}
+	this.equals=function(other) {
+		return /*this.player==other.player&&*/this.value==other.value;//player same in list
+	}
+}
+
+function displayDead() {
+	i=0;
+	j=0;
+	for(let deadPlayer of deadPieces) {
+		for(let deceased of deadPlayer) {
+			deceased.display(415+i*35,150+30*j);
+			j++;
+			if(j==8) {
+				j=0;
+				i++;
+			}
+		}
+		j=0;
+		i=2;
+	}
+}
 
 function preload() {
-	boardimg=loadImage("ChessAssets/chessboard.png");
+	boardimg=loadImage("ChessAssets/board.png");
 	ChessImages=[[],[]];
 	for(var c=0; c<2; c++) {
 		for(var p=0; p<6; p++) {
@@ -26,112 +68,157 @@ function preload() {
 
 function setup() {
 	select("#gamename").html("Chess");
-	createCanvas(400,400);
+	createCanvas(600,400);
+	makeDOM();
 	initializeVars();
-	messageSlot=createElement("h1");
-	messageSlot.position(20,height+10);
-	makeAgainButton();
-	makeUndoButton();
-	currPlayer=0;
-	messageSlot.html(playerNames[currPlayer]+"'s turn");
 }
 
 function draw() {
-	background(255);
-	image(boardimg,0,0,width,height);
-	//highlight
-	if(currPiece) {
-		currPiece.position.highlight(color(255,/*255*/0,0,150),false);
-		currPiece.highlightMoves();
+	if(!pause) {
+		background(255);
+		image(boardimg,0,0,400,400);
+		displayDead();
+		//highlight
+		if(currPiece) {
+			currPiece.position.highlight(color(255,/*255*/0,0,150),false);
+			if(highlightOn) {
+				currPiece.highlightMoves();
+			}
+		}
+		board.printGrid();
 	}
-	board.printGrid();
 }
 
 function mousePressed() {
 	let loc=board.findLocation(mouseX,mouseY);
-	if(loc) {
-		if(loc.player==currPlayer) {
+	if(loc&&checkMate==-1&&!pause) {
+		if(loc.piece&&loc.piece.player.num==currPlayer) {
 			currPiece=loc.piece;
 		} else if(currPiece&&currPiece.canMoveTo(loc)) {
-			currPiece.move(loc.row,loc.col);
+			hist.push(currPiece.move(loc));
 			currPiece=false;
+			updateAll();
+			validateAll();
+			playerList[1-currPlayer].updateCheck();
+			playerList[currPlayer].updateAllMoves();
 			switchPlayer();
-			playerList[0].updateAllMoves();
-			playerList[1].updateAllMoves();
+			playerList[currPlayer].endPassants();
+			undid=[];
 		} else {
 			currPiece=false;
 		}
 	}
 }
 
+function updateAll() {
+	playerList[currPlayer].updateAllMoves();//not yet switch player
+	playerList[1-currPlayer].updateAllMoves();
+}
+function validateAll() {
+	playerList[1-currPlayer].validate();//not yet switch player
+}
+
 function switchPlayer() {
-	currPlayer=1-currPlayer;
-	messageSlot.html(playerNames[currPlayer]+"'s turn");
+	if(checkMate==-1) {
+		currPlayer=1-currPlayer;
+		messageSlot.html(playerNames[currPlayer]+"'s turn");
+		if(playerList[currPlayer].updateCheck()) {
+			messageSlot.html("Check!   "+playerNames[currPlayer]+"'s turn");
+		}
+	}
 }
 
 function initializeVars() {
 	//rows,cols,boxWidth,boxHeight,canvasWidth,canvasHeight,spacing,statusList,pigment
-	board=new Grid(8,8,46,45,width,height,2,color(255));
+	board=new Grid(8,8,50,50,400,400,0,color(255));//(8,8,46,45,400,400,2,color(255));
+	currPiece=false;
+	currPlayer=0;
+	hist=[];
+	undid=[];
+	deadPieces=[[],[]];
+ 	checkMate=-1;
+	playerList=[];
 	playerList.push(new Player(0,-1,board,ChessImages[0]));
 	playerList.push(new Player(1,1,board,ChessImages[1]));
-	for(var i=0; i<2; i++) {
-		playerList[i].initializePieces();
+	for(let player of playerList) {
+		player.initializePieces();
 	}
-	player=0;
-	turns=0;
-	winLine=false;
-	pastMoves=[];
-	undoneMoves=[];
+	updateAll();
+	messageSlot.html(playerNames[currPlayer]+"'s turn");
 }
 
 function resetGame() {
 	messageSlot.html("");
-	again.hide();
-	background(255);
 	initializeVars();
 }
 
-function makeUndoButton() {
+function makeDOM() {
+	messageSlot=createElement("h1");
+	messageSlot.position(20,height+10);
+
+	again=createButton("Restart");
+	again.position(425,10);
+	again.mousePressed(resetGame);
+
 	undo=createButton("Undo");
-	undo.position(425,50);
+	undo.position(425,70);
 	undo.mousePressed(undoMove);
 
 	redo=createButton("Redo");
-	redo.position(425,80);
+	redo.position(425,100);
 	redo.mousePressed(redoMove);
+
+	highlightButton=createButton("Unhighlight");
+	highlightButton.position(425,40);
+	highlightButton.mousePressed(toggleHighlight);	
+}
+
+function toggleHighlight() {
+	if(highlightButton.html()=="Unhighlight") {
+		highlightButton.html("Highlight");
+	} else {
+		highlightButton.html("Unhighlight");
+	}
+	highlightOn=!highlightOn;
 }
 
 function redoMove() {
-	if(undoneMoves.length>0&&undoneMoves[undoneMoves.length-1].status==-1) {
-		re_move=undoneMoves.pop();
-		heights[re_move.col]--;
-		pastMoves.push(re_move);
-		re_move.status=player;
+	if(undid.length>0&&checkMate==-1&&!pause) {
+		currPiece=false;
+		let move=undid.pop();
+		move.execute();
+		hist.push(move);
+		updateAll();
+		validateAll();
+		playerList[1-currPlayer].updateCheck();
 		switchPlayer();
-		turns++;
 	}
 }
 
 function undoMove() {
-	if(!winLine&&turns>0) {
-		let lastTurn=pastMoves[pastMoves.length-1];
-		undoneMoves.push(lastTurn)
-		turns--;
+	if(hist.length>0&&checkMate==-1&&!pause) {
+		currPiece=false;
+		let move=hist.pop()
+		move.undo();
+		undid.push(move);
+		updateAll();
+		validateAll();
+		playerList[1-currPlayer].updateCheck();
 		switchPlayer();
-		lastTurn.status=-1;
-		heights[lastTurn.col]++;
-		pastMoves.splice(pastMoves.length-1,1)
 	}
 }
 
-function makeAgainButton() {
-	again=createButton("Play Again?")
-	again.position(150,425);
-	again.mousePressed(resetGame);
-	again.size(87,50)
-	again.style("background-color","rgb(0,0,200)");
-	again.style("border","none");
-	again.style("color","rgb(0,200,0)");
-	again.style("font-size","15px");
-	again.hide();
+function keyTyped() {
+	key=parseInt(key);
+	if(pause&&key>0&&key<5) {
+		promote(pause,key);
+	}
+}
+
+function promote(pawn,val) {
+	pawn=pause;
+	pawn.become=Pieces[val];
+	pawn.become(pawn.row,pawn.col)
+	pawn.img=pawn.player.pieceImageList[val];
+	pause=false;
 }

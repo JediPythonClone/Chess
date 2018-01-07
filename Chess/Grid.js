@@ -9,8 +9,6 @@ Location=function(grid,row,col,x,y,boxWidth,boxHeight,spacing) {
 	this.spacing=spacing;
 	this.midpointX=this.x+(this.boxWidth/2);
 	this.midpointY=this.y+(this.boxHeight/2);
-	this.status=-1;
-	this.player=-1;
 	this.piece=false;
 
 	this.isEmpty=function() {
