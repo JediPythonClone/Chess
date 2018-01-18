@@ -1,3 +1,5 @@
+var socket;
+
 var playerList;
 var playerNames=["White","Black"];
 var currPlayer;//num
@@ -16,7 +18,29 @@ var highlightOn=true;
 var highlightButton;
 var deadPieces;
 var pause=false;
+/*
+PUT ALL server stuff IN SERVER.JS NEWCONNECTION METHOD
 
+send msg to server:
+have data obj,
+socket.emit("name",data);
+
+recevie msg from client:
+socket.on("name",function(data){//some code});
+
+send msg from server to client:
+socket.broadcast.emit("name",data);
+//for sending to all clients: io.sockets.emit("name",data);
+
+recieve msg from server:
+in setup: socket.on("name",method);
+
+function method(data) {
+	//stuff
+}
+
+
+*/
 deadPiece=function(player,value) {
 	this.player=player;
 	this.value=value;
@@ -57,16 +81,18 @@ function displayDead() {
 
 function preload() {
 	boardimg=loadImage("ChessAssets/board.png");
+	//boardimg=loadImage("ChessAssets/chesspieceC0P0.png");
 	ChessImages=[[],[]];
 	for(var c=0; c<2; c++) {
 		for(var p=0; p<6; p++) {
-			let piece=loadImage("ChessAssets/chesspieceC"+c+"P"+p+".png");
+			let piece=loadImage("ChessAssets/chesspiecec"+c+"p"+p+".png");
 			ChessImages[c].push(piece);
 		}
 	}
 }
 
 function setup() {
+	//socket=io.connect("localhost:3000");
 	select("#gamename").html("Chess");
 	createCanvas(600,400);
 	makeDOM();
@@ -124,6 +150,9 @@ function switchPlayer() {
 		messageSlot.html(playerNames[currPlayer]+"'s turn");
 		if(playerList[currPlayer].updateCheck()) {
 			messageSlot.html("Check!   "+playerNames[currPlayer]+"'s turn");
+		} else if(playerList[currPlayer].getAllMoves().length==0) {
+			messageSlot.html("Stale Mate!!");
+			checkMate=2;
 		}
 	}
 }
@@ -221,4 +250,10 @@ function promote(pawn,val) {
 	pawn.become(pawn.row,pawn.col)
 	pawn.img=pawn.player.pieceImageList[val];
 	pause=false;
+	switchPlayer();
+	updateAll();
+	validateAll();
+	playerList[1-currPlayer].updateCheck();
+	playerList[currPlayer].updateAllMoves();
+	switchPlayer();
 }
